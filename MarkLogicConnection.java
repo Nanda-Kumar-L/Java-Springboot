@@ -21,7 +21,7 @@ public class MarkLogicConnection {
 
     public MarkLogicConnection(){
         client = DatabaseClientFactory.newClient(
-                        "localhost", 8000, "Documents",
+                        "localhost", 7500, "Documents",
                         new DatabaseClientFactory.DigestAuthContext("admin", "admin"));
 
         docManager = client.newTextDocumentManager();
