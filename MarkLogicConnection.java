@@ -1,16 +1,12 @@
-package com.javaspringml.marklogicjavaconnection;
+package com.javaspringml.marklogicjavaconnection.controller;
 
 
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.DatabaseClientFactory;
 import com.marklogic.client.document.TextDocumentManager;
-import com.marklogic.client.io.StringHandle;
-import org.springframework.stereotype.Component;
-import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.eval.EvalResult;
 import com.marklogic.client.eval.EvalResultIterator;
 import com.marklogic.client.eval.ServerEvaluationCall;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
