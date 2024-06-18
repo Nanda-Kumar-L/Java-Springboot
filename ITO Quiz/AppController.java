@@ -4,10 +4,9 @@ import com.marklogicquery.run.xquery.model.Question;
 import com.marklogicquery.run.xquery.service.QuestionService;
 import com.marklogicquery.run.xquery.service.SequenceGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api")
@@ -23,9 +22,34 @@ public class AppController {
 
 
     @PostMapping("/createQuestions")
-    public String createquestions(@RequestBody Question q)
+    public String create_questions(@RequestBody List<Question> question)
     {
-        return qs.createQuestion(q);
+        mlc.executeXQuery("");
+        StringBuilder sb = new StringBuilder();
+        for(Question q:question) {
+            q.setQuestion_id(String.valueOf(sg.nextId()));
+            sb.append(qs.createQuestion(q));
+        }
+        return sb.toString();
+    }
+
+    @GetMapping("/getQuestions")
+    public String get_questions()
+    {
+        return qs.getAllQuestions();
+    }
+
+    @GetMapping("/getQuestionById/{id}")
+    public String get_question_by_id(@PathVariable String id)
+    {
+        return qs.getQuestionById(id);
+    }
+
+    @PutMapping("/updateQuestion/{id}")
+    public String update_question_by_id(@PathVariable String id,@RequestBody Question q)
+    {
+        q.setQuestion_id(id);
+        return qs.updateQuestionById(id,q);
     }
 
 
