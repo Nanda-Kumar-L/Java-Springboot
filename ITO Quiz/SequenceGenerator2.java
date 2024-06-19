@@ -11,4 +11,8 @@ public class SequenceGenerator2 {
     public long nextId() {
         return sequence.incrementAndGet();
     }
+
+    public synchronized void reset(long initialValue) {
+        sequence.set(initialValue);
+    }
 }

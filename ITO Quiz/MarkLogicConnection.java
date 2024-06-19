@@ -31,7 +31,7 @@ public class MarkLogicConnection {
             }
             return result.toString();
         } catch (Exception e) {
-            return "Error executing XQuery: " + e.getMessage();
+            return "Error executing XQuery: " + e.getMessage()+"\n";
         }
     }
 }
