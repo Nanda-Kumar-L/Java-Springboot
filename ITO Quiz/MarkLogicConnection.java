@@ -1,4 +1,4 @@
-package com.marklogicquery.run.xquery.controller;
+package com.marklogicquery.run.xquery.service;
 
 import com.marklogic.client.DatabaseClient;
 import com.marklogic.client.DatabaseClientFactory;

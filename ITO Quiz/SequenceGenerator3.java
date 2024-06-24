@@ -6,7 +6,7 @@ import org.springframework.stereotype.Service;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
-public class SequenceGenerator2 {
+public class SequenceGenerator3 {
 
     @Autowired
     MarkLogicConnection mlc;
@@ -22,10 +22,10 @@ public class SequenceGenerator2 {
     }
 
     public String getSequence() {
-        return mlc.executeXQuery("data(doc(\"/itoquiz/SequenceGenerator\")/tXML/SequenceGenerator/SequenceGenerator2)");
+        return mlc.executeXQuery("data(doc(\"/itoquiz/SequenceGenerator\")/tXML/SequenceGenerator/SequenceGenerator3)");
     }
 
     public void setSequence(long id) {
-        mlc.executeXQuery("xdmp:node-replace(doc(\"/itoquiz/SequenceGenerator\")/tXML/SequenceGenerator/SequenceGenerator2, element SequenceGenerator2{"+id+"})");
+        mlc.executeXQuery("xdmp:node-replace(doc(\"/itoquiz/SequenceGenerator\")/tXML/SequenceGenerator/SequenceGenerator3, element SequenceGenerator3{"+id+"})");
     }
 }
