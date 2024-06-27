@@ -9,7 +9,8 @@ import java.util.List;
 @Getter
 public class Answer{
     private String id;
+
     private String candidate_id;
-    private List<String> question_ids;
-    private List<Integer> answers;
+
+    private List<QuestionIdAndAnswer> objects;
 }

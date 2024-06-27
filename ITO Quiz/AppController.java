@@ -17,52 +17,52 @@ import java.util.List;
 public class AppController {
 
     @Autowired
-    private QuestionSetIdGenerator questionSetIdGenerator;
+    SequenceGenerator.QuestionSetIdGenerator questionSetIdGenerator;
 
     @Autowired
-    private QuestionIdGenerator questionIdGenerator;
+    SequenceGenerator.QuestionIdGenerator questionIdGenerator;
 
     @Autowired
-    private CandidateIdGenerator candidateIdGenerator;
+    SequenceGenerator.CandidateIdGenerator candidateIdGenerator;
 
     @Autowired
-    private AnswerIdGenerator answerIdGenerator;
+    SequenceGenerator.AnswerIdGenerator answerIdGenerator;
 
     @Autowired
-    private AdminRepository adminRepository;
+    AdminRepository adminRepository;
 
     @Autowired
-    private PathRangeIndexRepository pathRangeIndexRepository;
+    PathRangeIndexRepository pathRangeIndexRepository;
 
     @Autowired
-    private CandidateRepository candidateRepository;
+    CandidateRepository candidateRepository;
 
     @PostMapping("/createQuestions")
     public String create_questions(@RequestBody List<Question> question)
     {
         pathRangeIndexRepository.createPathRangeIndexes();
         questionSetIdGenerator.setId(Long.parseLong(questionSetIdGenerator.fetchIdFromDatabase().trim()));
-        long id1 = questionSetIdGenerator.nextId();
-        adminRepository.CreateQuestionSet(id1);
+        long questionSetId = questionSetIdGenerator.nextId();
+        adminRepository.CreateQuestionSet(questionSetId);
         StringBuilder sb = new StringBuilder();
         for(Question q:question) {
             questionIdGenerator.setId(Long.parseLong(questionIdGenerator.fetchIdFromDatabase().trim()));
-            long id2 = questionIdGenerator.nextId();
-            q.setQuestion_id(String.valueOf(id2));
-            sb.append(adminRepository.createQuestion(q, id1));
-            questionIdGenerator.updateIdInDatabase(id2);
+            long questionId = questionIdGenerator.nextId();
+            q.setQuestion_id(String.valueOf(questionId));
+            sb.append(adminRepository.createQuestion(q, questionSetId));
+            questionIdGenerator.updateIdInDatabase(questionId);
         }
-        questionSetIdGenerator.updateIdInDatabase(id1);
+        questionSetIdGenerator.updateIdInDatabase(questionSetId);
         return sb.toString();
     }
 
-    @GetMapping("/getQuestions")
+    @GetMapping(value="/getQuestions", produces = "application/json")
     public String get_questions()
     {
         return adminRepository.getAllQuestions();
     }
 
-    @GetMapping("/getQuestionSetById")
+    @GetMapping(value="/getQuestionSetById",produces="application/json")
     public String get_question_set_by_id(@RequestParam String questionSetId)
     {
         return adminRepository.getQuestionSetById(questionSetId);
@@ -103,12 +103,12 @@ public class AppController {
     }
 
     @GetMapping("/Evaluate")
-    public String evaluate(@RequestParam String candidateId)
+    public String evaluate(@RequestParam String candidateId,@RequestParam String answerId)
     {
-        return adminRepository.evaluate(candidateId);
+        return adminRepository.evaluate(candidateId,answerId);
     }
 
-    @PostMapping("/Assessment/getCandidateId")
+    @PostMapping("/assessment/getCandidateId")
     public String get_candidate_id(@RequestBody Candidate candidate)
     {
         candidateIdGenerator.setId(Long.parseLong(candidateIdGenerator.fetchIdFromDatabase().trim()));
@@ -119,9 +119,9 @@ public class AppController {
     }
 
     @GetMapping("/Assessment/getQuestionSet")
-    public String get_question_set(@RequestParam String candidateId)
+    public String get_question_set(@RequestParam String candidateId,@RequestParam(required = false) String questionSetId)
     {
-        return candidateRepository.getQuestionSet(candidateId);
+        return candidateRepository.getQuestionSet(candidateId,questionSetId);
     }
 
     @PostMapping("/Assessment/submitAnswerSheet")

@@ -2,30 +2,30 @@ package com.marklogicquery.run.xquery.repository;
 
 import com.marklogicquery.run.xquery.model.Answer;
 import com.marklogicquery.run.xquery.model.Candidate;
+import com.marklogicquery.run.xquery.model.QuestionIdAndAnswer;
 import com.marklogicquery.run.xquery.service.MarkLogicConnection;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-@Service
+@Repository
 public class CandidateRepository {
 
     @Autowired
     MarkLogicConnection mlc;
 
-    private String createAnswerElements(List<Integer> answers) {
-        StringBuilder sb = new StringBuilder();
-        for (Integer s : answers) {
-            sb.append("element answer{").append(s).append("},");
-        }
-        return sb.substring(0, sb.length() - 1);
-    }
+    private String getObjectElements(List<QuestionIdAndAnswer> objects) throws Exception {
 
-    private String createQuestionIdElements(List<String> questionIds) {
         StringBuilder sb = new StringBuilder();
-        for (String s : questionIds) {
-            sb.append("element questionId{\"").append(s).append("\"},");
+        for (QuestionIdAndAnswer questionIdAndAnswer : objects) {
+            if (questionIdAndAnswer.getAnswer() ==null)
+                throw new Exception("Please enter 10 answers");
+            if (questionIdAndAnswer.getQuestion_id() ==null)
+                throw new Exception("Please enter 10 question Ids");
+            sb.append("element Object{");
+            sb.append("element answer{").append(questionIdAndAnswer.getAnswer()).append("},");
+            sb.append("element questionId{\"").append(questionIdAndAnswer.getQuestion_id()).append("\"}},");
         }
         return sb.substring(0, sb.length() - 1);
     }
@@ -59,55 +59,80 @@ public class CandidateRepository {
         }
     }
 
-    public String getQuestionSet(String candidateId) {
-        return mlc.executeXQuery("declare function local:getRandomValues($count)\n" +
+    public String getQuestionSet(String candidateId, String questionSetId) {
+        return mlc.executeXQuery("declare function local:getRandomIndexValues($CountOfExistingQuestions,$max)\n" +
                 "{\n" +
-                "  let $numbers := fn:distinct-values((1 to 10) ! (xdmp:random($count - 1)+1))\n" +
+                "  let $numbers := fn:distinct-values((1 to $max) ! (xdmp:random($CountOfExistingQuestions - 1)+1))\n" +
                 "  return\n" +
-                "  if(count($numbers) = 10) then\n" +
-                "  $numbers\n" +
-                "  else\n" +
-                "  local:getRandomValues($count)\n" +
+                "    if(count($numbers) = $max) then\n" +
+                "      $numbers\n" +
+                "    else\n" +
+                "      local:getRandomIndexValues($CountOfExistingQuestions,$max)\n" +
                 "};\n" +
+                "declare function local:getJson($questionSet)\n" +
+                "{\n" +
+                "  let $json := map:map()\n" +
+                "  let $Questions:=\n" +
+                "    for $question in $questionSet\n" +
+                "    let $Question := map:map()\n" +
+                "    let $_:= map:put($Question, \"QuestionId\", data($question/questionId))\n" +
+                "    let $_:= map:put($Question, \"Question\", data($question/question))\n" +
+                "    let $_:= map:put($Question, \"Options\", data($question/options/option))\n" +
+                "    return xdmp:to-json($Question)\n" +
+                "  let $questionArray := json:to-array($Questions)\n" +
+                "  let $_ := map:put($json, \"questions\", $questionArray)\n" +
+                "  let $_ := map:put($json, \"id\", data($questionSet/Id))\n" +
+                "  return xdmp:to-json($json)\n" +
+                "};\n" +
+                "\n" +
                 "let $candidate := cts:search(/tXML/Candidate,cts:and-query((cts:collection-query(\"Candidate\"),cts:path-range-query(\"/tXML/Candidate/candidate_id\", \"=\", \""+candidateId+"\"))))\n" +
                 "return\n" +
                 "if(exists($candidate)) then\n" +
                 "(\n" +
+                "  if($candidate/isSubmit eq false()) then\n" +
+                "  (\n" +
                 "  if($candidate/isStarted eq false()) then\n" +
                 "  (\n" +
-                "    let $count := count(cts:search(/tXML/Questions/Question, (cts:collection-query(\"Questions\"))))\n" +
+                "    let $CountOfExistingQuestions := count(cts:search(/tXML/Questions/Question, (cts:collection-query(\"Questions\"))))\n" +
+                "    let $max := 10\n" +
                 "    return\n" +
-                "    if($count<10) then\n" +
-                "    \"There isn't 10 questions in the database\"\n" +
+                "    if($CountOfExistingQuestions < $max) then\n" +
+                "    \"There isn't \"||$max||\" questions in the database\"\n" +
                 "    else\n" +
                 "    (\n" +
-                "    let $_ := xdmp:node-replace($candidate/isStarted, element isStarted{true()})\n" +
-                "    let $questionSet := cts:search(/tXML/Questions/Question, (cts:collection-query(\"Questions\")))[local:getRandomValues($count)]\n" +
-                "    let $json := map:map()\n" +
-                "    let $Questions:=\n" +
-                "      for $question in $questionSet\n" +
-                "      let $Question := map:map()\n" +
-                "      let $_:= map:put($Question, \"QuestionId\", data($question/questionId))\n" +
-                "      let $_:= map:put($Question, \"Question\", data($question/question))\n" +
-                "      let $_:= map:put($Question, \"Options\", data($question/options/option))\n" +
-                "      return xdmp:to-json($Question)\n" +
-                "    let $questionArray := json:to-array($Questions)\n" +
-                "    let $_ := map:put($json, \"questions\", $questionArray)\n" +
-                "    let $_ := map:put($json, \"id\", data($questionSet/Id))\n" +
-                "    return xdmp:to-json($json)\n" +
+                "      let $questionSetId := \""+questionSetId+"\"\n" +
+                "      let $questionSet := cts:search(/tXML/Questions, cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Id\", \"=\", $questionSetId))))\n" +
+                "      return\n" +
+                "      if($questionSetId eq \"null\") then \n" +
+                "      (\n" +
+                "        let $_ := xdmp:node-replace($candidate/isStarted, element isStarted{true()})\n" +
+                "        let $questions := cts:search(/tXML/Questions/Question, (cts:collection-query(\"Questions\")))[local:getRandomIndexValues($CountOfExistingQuestions,$max)]\n" +
+                "        return local:getJson($questions)\n" +
+                "      )\n" +
+                "      else if(exists($questionSet)) then\n" +
+                "      (\n" +
+                "        if(count($questionSet/Question) eq $max) then\n" +
+                "        (\n" +
+                "          let $_ := xdmp:node-replace($candidate/isStarted, element isStarted{true()})\n" +
+                "          let $questions := $questionSet/Question\n" +
+                "          return local:getJson($questions)\n" +
+                "        )\n" +
+                "        else \"The question set doesn't have \"||$max||\" questions\"\n" +
+                "      )\n" +
+                "      else \"Invalid QuestionSet Id\"\n" +
                 "    )\n" +
                 "  )\n" +
                 "  else \"Exam Assessment Running\"\n" +
+                "  )\n" +
+                "  else \"Exam already submitted\"\n" +
                 ")\n" +
                 "else \"Candidate Id doesn’t exist\"");
     }
 
     public String submitAnswerSheet(String candidateId, Answer answer) {
         try {
-            if (answer.getQuestion_ids().size() != 10)
-                throw new Exception("Please enter 10 question ids");
-            if (answer.getAnswers().size() != 10)
-                throw new Exception("Please enter 10 answers");
+            if (answer.getObjects().size() != 10)
+                throw new Exception("Please enter 10 question ids and answers");
             return mlc.executeXQuery("let $candidate := cts:search(/tXML/Candidate,cts:and-query((cts:collection-query(\"Candidate\"),cts:path-range-query(\"/tXML/Candidate/candidate_id\", \"=\", \"" + candidateId + "\"))))\n" +
                     "return\n" +
                     "if(exists($candidate)) then\n" +
@@ -121,8 +146,7 @@ public class CandidateRepository {
                     "      element Answer{\n" +
                     "          element Id{\"" + answer.getId() + "\"},\n" +
                     "          element candidateId{$candidate/candidate_id/string()},\n" +
-                    "          element questionIds{" + createQuestionIdElements(answer.getQuestion_ids()) + "},\n" +
-                    "          element answers{" + createAnswerElements(answer.getAnswers()) + "}\n" +
+                    "          element questionIdsAndAnswers{" + getObjectElements(answer.getObjects()) + "}\n" +
                     "        }\n" +
                     "      }, \n" +
                     "    <options xmlns=\"xdmp:document-insert\">\n" +
@@ -136,13 +160,12 @@ public class CandidateRepository {
                     "    ,\n" +
                     "    let $score :=\n" +
                     "      let $count := (0)\n" +
-                    "      let $questions := element questionIds{" + createQuestionIdElements(answer.getQuestion_ids()) + "}\n" +
-                    "      let $answers := element answers{" + createAnswerElements(answer.getAnswers()) + "}\n" +
-                    "      for $questionId at $x in $questions/questionId\n" +
-                    "      let $storedQuestionInDatabase := cts:search(/tXML/Questions/Question,cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Question/questionId\", \"=\", $questionId))))\n" +
-                    "      let $_ := if($answers/answer[$x] eq $storedQuestionInDatabase/answer) then xdmp:set($count, $count + 1) else ()\n" +
+                    "      let $questionIdsAndAnswers := element questionIdsAndAnswers{" + getObjectElements(answer.getObjects()) + "}\n" +
+                    "      for $questionIdAndAnswerObject in $questionIdsAndAnswers/Object\n" +
+                    "      let $storedQuestionInDatabase := cts:search(/tXML/Questions/Question,cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Question/questionId\", \"=\", $questionIdAndAnswerObject/questionId))))\n" +
+                    "      let $_ := if($questionIdAndAnswerObject/answer eq $storedQuestionInDatabase/answer) then xdmp:set($count, $count + 1) else ()\n" +
                     "      return $count\n" +
-                    "    return if(fn:max($score) > 6) then \"Selected for the next Round\" else \"Sorry you are not selected. Better luck next time\"\n" +
+                    "    return if(fn:max($score) > 6) then \"Selected for the next Round\" else \"Sorry you are not selected. Better luck next time\"|| \"      AnswerID=/\"||\""+ answer.getId() +"\"\n" +
                     "  )\n" +
                     "  else \"Answer already submitted\"\n" +
                     "  )\n" +
@@ -153,5 +176,7 @@ public class CandidateRepository {
             return "Error: " + e.getMessage() + "\n";
         }
     }
+
+
 
 }

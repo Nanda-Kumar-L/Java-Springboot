@@ -4,15 +4,17 @@ import com.marklogicquery.run.xquery.model.Question;
 import com.marklogicquery.run.xquery.service.MarkLogicConnection;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 import java.util.List;
+import java.util.Objects;
 
-@Service
+@Repository
 public class AdminRepository {
+
     @Autowired
-    private MarkLogicConnection mlc;
+    MarkLogicConnection mlc;
 
     public String getOptionElements(List<String> options) {
         StringBuilder sb = new StringBuilder();
@@ -65,7 +67,11 @@ public class AdminRepository {
     public String getAllQuestions() {
         try{
             return mlc.executeXQuery("""
-                    let $a := for $i in cts:search(/tXML/Questions,cts:collection-query("Questions"))
+                    import module namespace json="http://marklogic.com/xdmp/json" at "/MarkLogic/json/json.xqy";
+                    if(count(cts:search(/tXML/Questions,cts:collection-query("Questions"))) eq 0) then "No Question available"
+                    else
+                    (
+                    let $var := for $i in cts:search(/tXML/Questions,cts:collection-query("Questions"))
                               let $json := map:map()
                               let $Questions:=
                                 for $j in $i/Question
@@ -79,7 +85,8 @@ public class AdminRepository {
                               let $_ := map:put($json, "questions", $questionArray)
                               let $_ := map:put($json, "id", data($i/Id))
                               return xdmp:to-json($json)
-                    return json:to-array($a)""");
+                    return json:to-array($var)
+                    )""");
         }
         catch (Exception e){
             return e.getMessage();
@@ -88,6 +95,8 @@ public class AdminRepository {
 
     public String getQuestionSetById(String id) {
         return mlc.executeXQuery("let $questionSet := cts:search(/tXML/Questions, cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Id\", \"=\", \""+id+"\"))))\n" +
+                "return if(exists($questionSet)) then\n" +
+                "(" +
                 "let $json := map:map()\n" +
                 "let $Questions:=\n" +
                 "  for $question in $questionSet/Question\n" +
@@ -100,11 +109,16 @@ public class AdminRepository {
                 "let $questionArray := json:to-array($Questions)\n" +
                 "let $_ := map:put($json, \"questions\", $questionArray)\n" +
                 "let $_ := map:put($json, \"id\", data($questionSet/Id))\n" +
-                "return xdmp:to-json($json)");
+                "return xdmp:to-json($json)" +
+                ")\n" +
+                "else\n" +
+                "  \"Invalid Question Set ID\"");
     }
 
     public String getQuestionById(String questionSetId, String questionId) {
         return mlc.executeXQuery("let $questionSet := cts:search(/tXML/Questions, cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Id\", \"=\", \""+questionSetId+"\"))))\n" +
+                "return if(exists($questionSet/Question[questionId eq \""+questionId+"\"])) then\n" +
+                "(" +
                 "let $json := map:map()\n" +
                 "let $Questions:=\n" +
                 "  let $question := $questionSet/Question[questionId eq \""+questionId+"\"]\n" +
@@ -117,7 +131,10 @@ public class AdminRepository {
                 "let $questionArray := json:to-array($Questions)\n" +
                 "let $_ := map:put($json, \"questions\", $questionArray)\n" +
                 "let $_ := map:put($json, \"id\", data($questionSet/Id))\n" +
-                "return xdmp:to-json($json)");
+                "return xdmp:to-json($json)" +
+                ")\n" +
+                "else\n" +
+                "  \"Invalid Question Number\"");
     }
 
     public String updateQuestionById(String questionSetId, String questionId, Question q) {
@@ -163,35 +180,42 @@ public class AdminRepository {
         }
     }
 
-    public String evaluate(String candidateId) {
-        return mlc.executeXQuery("let $candidate := cts:search(/tXML/Candidate,cts:and-query((cts:collection-query(\"Candidate\"),cts:path-range-query(\"/tXML/Candidate/candidate_id\", \"=\", \""+candidateId+"\"))))\n" +
-                "return\n" +
-                "if(exists($candidate)) then\n" +
-                "(\n" +
-                "  if($candidate/isStarted eq true() and $candidate/isSubmit eq true()) then\n" +
-                "  (" +
-                "    let $_ := xdmp:node-replace($candidate/isStarted, element isStarted{false()})\n" +
-                "    let $_ := xdmp:node-replace($candidate/isSubmit, element isSubmit{false()})\n" +
-                "      let $marks :=\n" +
-                "      let $count := (0)\n" +
-                "      let $questionIds := cts:search(/tXML/Answer,cts:and-query((cts:collection-query(\"Answers\"),cts:path-range-query(\"/tXML/Answer/candidateId\", \"=\", $candidate/candidate_id))))/questionIds\n" +
-                "      let $answers := cts:search(/tXML/Answer,cts:and-query((cts:collection-query(\"Answers\"),cts:path-range-query(\"/tXML/Answer/candidateId\", \"=\", $candidate/candidate_id))))/answers\n" +
-                "      for $questionId at $x in $questionIds/questionId\n" +
-                "      let $storedQuestionInDatabase := cts:search(/tXML/Questions/Question,cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Question/questionId\", \"=\", $questionId))))\n" +
-                "      let $_ := if($answers/answer[$x] eq $storedQuestionInDatabase/answer) then xdmp:set($count, $count + 1) else ()\n" +
-                "      return $count\n" +
-                "  let $score:= fn:max($marks)\n" +
-                "  return \n" +
-                "  (if($score > 6) then \n" +
-                "      \"<\"||$candidate/candidate_id/string()||\"> : <\"||$candidate/name/string()||\"> is selected for next Round.&#10;\"\n" +
-                "    else \n" +
-                "      \"<\"||$candidate/candidate_id/string()||\"> : <\"||$candidate/name/string()||\"> is rejected in this Round.&#10;\")\n" +
-                "      ||\"Correct Answer: \"||$score||\"&#10;\"\n" +
-                "      ||\"Incorrect Answer: \"||(10 - $score)\n" +
-                "    )\n" +
-                "    else \"Exam is not submitted\"\n" +
-                ")\n" +
-                "else \"Candidate Id doesn’t exist\"");
+    public String evaluate(String candidateId, String answerId) {
+        try {
+            if (Objects.equals(candidateId, ""))
+                throw new Exception("Please enter candidate Id");
+            if (Objects.equals(answerId, ""))
+                throw new Exception("Please enter answer Id");
+            return mlc.executeXQuery("let $candidate := cts:search(/tXML/Candidate,cts:and-query((cts:collection-query(\"Candidate\"),cts:path-range-query(\"/tXML/Candidate/candidate_id\", \"=\", \"" + candidateId + "\"))))\n" +
+                    "return\n" +
+                    "if(exists($candidate)) then\n" +
+                    "(\n" +
+                    "  if($candidate/isStarted eq true() and $candidate/isSubmit eq true()) then\n" +
+                    "  (" +
+                    "    let $_ := xdmp:node-replace($candidate/isStarted, element isStarted{false()})\n" +
+                    "    let $_ := xdmp:node-replace($candidate/isSubmit, element isSubmit{false()})\n" +
+                    "      let $marks :=\n" +
+                    "      let $count := (0)\n" +
+                    "      let $questionIdsAndAnswers := cts:search(/tXML/Answer,cts:and-query((cts:collection-query(\"Answers\"),cts:path-range-query(\"/tXML/Answer/candidateId\", \"=\", $candidate/candidate_id))))[Id eq \"" + answerId + "\"]/questionIdsAndAnswers\n" +
+                    "        for $questionIdAndAnswerObject in $questionIdsAndAnswers/Object\n" +
+                    "        let $storedQuestionInDatabase := cts:search(/tXML/Questions/Question,cts:and-query((cts:collection-query(\"Questions\"),cts:path-range-query(\"/tXML/Questions/Question/questionId\", \"=\", $questionIdAndAnswerObject/questionId))))\n" +
+                    "        let $_ := if($questionIdAndAnswerObject/answer eq $storedQuestionInDatabase/answer) then xdmp:set($count, $count + 1) else ()\n" +
+                    "        return $count\n" +
+                    "  let $score:= fn:max($marks)\n" +
+                    "  return \n" +
+                    "  (if($score > 6) then \n" +
+                    "      \"<\"||$candidate/candidate_id/string()||\"> : <\"||$candidate/name/string()||\"> is selected for next Round.&#10;\"\n" +
+                    "    else \n" +
+                    "      \"<\"||$candidate/candidate_id/string()||\"> : <\"||$candidate/name/string()||\"> is rejected in this Round.&#10;\")\n" +
+                    "      ||\"Correct Answer: \"||$score||\"&#10;\"\n" +
+                    "      ||\"Incorrect Answer: \"||(10 - $score)\n" +
+                    "    )\n" +
+                    "    else \"Exam is not submitted\"\n" +
+                    ")\n" +
+                    "else \"Candidate Id doesn’t exist\"");
+        } catch (Exception e) {
+            return "Error: "+e.getMessage()+"\n";
+        }
     }
 
 
